@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Singapore Live Traffic Cameras</title>
+    <style>
+        :root {
+            --bg-color: #f4f4f9;
+            --text-color: #333;
+            --card-bg: #fff;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 40px 20px;
+            text-align: center;
+        }
+
+        h1 { margin: 0 0 10px 0; }
+        p.subtitle { color: #666; margin-bottom: 40px; }
+
+        .camera-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 25px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .camera-card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
+            overflow: hidden;
+            width: calc(33.333% - 25px);
+            min-width: 320px;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        
+        .camera-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 25px -5px rgba(0,0,0,0.15);
+        }
+
+        .camera-card img {
+            width: 100%;
+            height: auto;
+            display: block;
+            aspect-ratio: 16/9;
+            object-fit: cover;
+            background-color: #ddd;
+        }
+
+        .camera-info {
+            padding: 15px;
+            font-size: 14px;
+            text-align: left;
+            border-top: 1px solid #eee;
+        }
+
+        /* Fullscreen Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 9999;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.95);
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            backdrop-filter: blur(5px);
+        }
+
+        .modal-content {
+            max-width: 95vw;
+            max-height: 85vh;
+            object-fit: contain;
+            border-radius: 8px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+
+        .close {
+            position: absolute;
+            top: 20px;
+            right: 40px;
+            color: #fff;
+            font-size: 40px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+
+        .close:hover { color: #ff4757; }
+
+        .modal-caption {
+            color: #fff;
+            margin-top: 20px;
+            font-size: 18px;
+            letter-spacing: 1px;
+        }
+
+        .loading {
+            font-size: 18px;
+            color: #666;
+            padding: 40px;
+        }
+
+        @media (max-width: 1024px) {
+            .camera-card { width: calc(50% - 25px); }
+        }
+        @media (max-width: 768px) {
+            .camera-card { width: 100%; }
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Live Traffic Cameras</h1>
+    <p class="subtitle">Top 3 Highest Resolution Views in Singapore</p>
+
+    <div id="loading" class="loading">Fetching live camera feeds...</div>
+    <div id="camera-container" class="camera-container"></div>
+
+    <!-- Fullscreen Modal -->
+    <div id="fullscreenModal" class="modal">
+        <span class="close" id="closeModal">&times;</span>
+        <img class="modal-content" id="modalImg" alt="Fullscreen Traffic Camera">
+        <div id="modalCaption" class="modal-caption"></div>
+    </div>
+
+    <script>
+        // Data.gov.sg public API for real-time traffic images 
+        const API_URL = 'https://api.data.gov.sg/v1/transport/traffic-images';
+
+        async function fetchCameras() {
+            try {
+                const response = await fetch(API_URL);
+                const data = await response.json();
+                
+                if (data.items && data.items.length > 0) {
+                    let cameras = data.items[0].cameras;
+
+                    // Sort cameras by resolution (width * height) in descending order
+                    cameras.sort((a, b) => {
+                        const resA = (a.image_metadata.width || 0) * (a.image_metadata.height || 0);
+                        const resB = (b.image_metadata.width || 0) * (b.image_metadata.height || 0);
+                        return resB - resA;
+                    });
+
+                    // Extract the top 3 highest resolution cameras
+                    const top3Cameras = cameras.slice(0, 3);
+                    renderCameras(top3Cameras);
+                } else {
+                    document.getElementById('loading').innerText = "No camera data available right now.";
+                }
+            } catch (error) {
+                console.error("Error fetching camera data:", error);
+                document.getElementById('loading').innerText = "Failed to load camera feeds. Check console for details.";
+            }
+        }
+
+        function renderCameras(cameras) {
+            const container = document.getElementById('camera-container');
+            document.getElementById('loading').style.display = 'none';
+
+            cameras.forEach(cam => {
+                const resString = `${cam.image_metadata.width} x ${cam.image_metadata.height}px`;
+                
+                const card = document.createElement('div');
+                card.className = 'camera-card';
+                card.innerHTML = `
+                    <img src="${cam.image}" alt="Traffic Camera ${cam.camera_id}">
+                    <div class="camera-info">
+                        <strong>Camera ID:</strong> ${cam.camera_id}<br>
+                        <strong>Resolution:</strong> ${resString}
+                    </div>
+                `;
+
+                // Click event to trigger the standalone full-screen viewer
+                card.addEventListener('click', () => {
+                    openModal(cam.image, `Camera ID: ${cam.camera_id} | Resolution: ${resString}`);
+                });
+                
+                container.appendChild(card);
+            });
+        }
+
+        // Modal (Standalone Viewer) Logic
+        const modal = document.getElementById('fullscreenModal');
+        const modalImg = document.getElementById('modalImg');
+        const modalCaption = document.getElementById('modalCaption');
+        const closeBtn = document.getElementById('closeModal');
+
+        function openModal(imgSrc, caption) {
+            modal.style.display = "flex";
+            modalImg.src = imgSrc;
+            modalCaption.innerText = caption;
+            document.body.style.overflow = "hidden"; // Prevent background scrolling
+        }
+
+        function closeModal() {
+            modal.style.display = "none";
+            document.body.style.overflow = "auto";
+        }
+
+        closeBtn.onclick = closeModal;
+
+        // Close modal when clicking on the dark background (outside the image)
+        window.onclick = function(event) {
+            if (event.target == modal) {
+                closeModal();
+            }
+        }
+
+        // Press 'Escape' to close modal
+        window.addEventListener('keydown', function(event) {
+            if (event.key === "Escape") {
+                closeModal();
+            }
+        });
+
+        // Initialize script
+        fetchCameras();
+    </script>
+</body>
+</html>
