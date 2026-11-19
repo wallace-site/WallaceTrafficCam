@@ -191,3 +191,65 @@
                     document.getElementById('loading').innerText = "No camera data available right now.";
                 }
             } catch (error) {
+                console.error("Error fetching camera data:", error);
+                document.getElementById('loading').innerText = "Failed to load camera feeds.";
+            }
+        }
+
+        function renderCameras(cameras) {
+            const container = document.getElementById('camera-container');
+            document.getElementById('loading').style.display = 'none';
+
+            cameras.forEach(cam => {
+                const resString = `${cam.image_metadata.width} x ${cam.image_metadata.height}px`;
+                const formattedTime = formatTimestamp(cam.timestamp);
+                
+                const card = document.createElement('div');
+                card.className = 'camera-card';
+                card.innerHTML = `
+                    <img src="${cam.image}" alt="${cam.customName}">
+                    <div class="camera-info">
+                        <strong>${cam.customName}</strong><br>
+                        Camera ID: ${cam.camera_id} | ${resString}
+                        <span class="timestamp">Captured: ${formattedTime}</span>
+                    </div>
+                `;
+
+                card.addEventListener('click', () => {
+                    openModal(cam.image, `${cam.customName} (ID: ${cam.camera_id}) — Captured: ${formattedTime}`);
+                });
+                
+                container.appendChild(card);
+            });
+        }
+
+        // Fullscreen Modal Logic
+        const modal = document.getElementById('fullscreenModal');
+        const modalImg = document.getElementById('modalImg');
+        const modalCaption = document.getElementById('modalCaption');
+        const closeBtn = document.getElementById('closeModal');
+
+        function openModal(imgSrc, caption) {
+            modal.style.display = "flex";
+            modalImg.src = imgSrc;
+            modalCaption.innerText = caption;
+            document.body.style.overflow = "hidden";
+        }
+
+        function closeModal() {
+            modal.style.display = "none";
+            document.body.style.overflow = "auto";
+        }
+
+        closeBtn.onclick = closeModal;
+        window.onclick = function(event) {
+            if (event.target == modal) closeModal();
+        }
+        window.addEventListener('keydown', function(event) {
+            if (event.key === "Escape") closeModal();
+        });
+
+        fetchCameras();
+    </script>
+</body>
+</html>
