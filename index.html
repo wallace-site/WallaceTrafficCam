@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Singapore Live Traffic Cameras</title>
+    <title>Live Traffic Cameras</title>
     <style>
         :root {
             --bg-color: #f4f4f9;
@@ -62,6 +62,14 @@
             font-size: 14px;
             text-align: left;
             border-top: 1px solid #eee;
+            line-height: 1.5;
+        }
+
+        .timestamp {
+            color: #0066cc;
+            font-weight: 500;
+            margin-top: 4px;
+            display: block;
         }
 
         /* Fullscreen Modal Styles */
@@ -105,7 +113,9 @@
             color: #fff;
             margin-top: 20px;
             font-size: 18px;
-            letter-spacing: 1px;
+            letter-spacing: 0.5px;
+            text-align: center;
+            padding: 0 20px;
         }
 
         .loading {
@@ -125,7 +135,7 @@
 <body>
 
     <h1>Live Traffic Cameras</h1>
-    <p class="subtitle">Top 3 Highest Resolution Views in Singapore</p>
+    <p class="subtitle">Woodlands & BKE Live Views</p>
 
     <div id="loading" class="loading">Fetching live camera feeds...</div>
     <div id="camera-container" class="camera-container"></div>
@@ -138,8 +148,29 @@
     </div>
 
     <script>
-        // Data.gov.sg public API for real-time traffic images 
         const API_URL = 'https://api.data.gov.sg/v1/transport/traffic-images';
+
+        const PREFERRED_CAMERAS = [
+            { id: '2701', name: 'Woodlands Causeway (Towards Johor)' },
+            { id: '2702', name: 'Woodlands Checkpoint (Towards BKE)' },
+            { id: '2704', name: 'BKE (Before Woodlands Checkpoint)' }
+        ];
+
+        // Helper function to format ISO timestamp to readable SG Date & Time
+        function formatTimestamp(isoString) {
+            if (!isoString) return 'Timestamp unavailable';
+            const date = new Date(isoString);
+            return date.toLocaleString('en-SG', {
+                timeZone: 'Asia/Singapore',
+                day: '2-digit',
+                month: 'short',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: true
+            });
+        }
 
         async function fetchCameras() {
             try {
@@ -147,24 +178,20 @@
                 const data = await response.json();
                 
                 if (data.items && data.items.length > 0) {
-                    let cameras = data.items[0].cameras;
+                    const allCameras = data.items[0].cameras;
 
-                    // Sort cameras by resolution (width * height) in descending order
-                    cameras.sort((a, b) => {
-                        const resA = (a.image_metadata.width || 0) * (a.image_metadata.height || 0);
-                        const resB = (b.image_metadata.width || 0) * (b.image_metadata.height || 0);
-                        return resB - resA;
-                    });
+                    const selectedCameras = PREFERRED_CAMERAS.map(pref => {
+                        const found = allCameras.find(cam => cam.camera_id === pref.id);
+                        return found ? { ...found, customName: pref.name } : null;
+                    }).filter(Boolean);
 
-                    // Extract the top 3 highest resolution cameras
-                    const top3Cameras = cameras.slice(0, 3);
-                    renderCameras(top3Cameras);
+                    renderCameras(selectedCameras);
                 } else {
                     document.getElementById('loading').innerText = "No camera data available right now.";
                 }
             } catch (error) {
                 console.error("Error fetching camera data:", error);
-                document.getElementById('loading').innerText = "Failed to load camera feeds. Check console for details.";
+                document.getElementById('loading').innerText = "Failed to load camera feeds.";
             }
         }
 
@@ -174,27 +201,28 @@
 
             cameras.forEach(cam => {
                 const resString = `${cam.image_metadata.width} x ${cam.image_metadata.height}px`;
+                const formattedTime = formatTimestamp(cam.timestamp);
                 
                 const card = document.createElement('div');
                 card.className = 'camera-card';
                 card.innerHTML = `
-                    <img src="${cam.image}" alt="Traffic Camera ${cam.camera_id}">
+                    <img src="${cam.image}" alt="${cam.customName}">
                     <div class="camera-info">
-                        <strong>Camera ID:</strong> ${cam.camera_id}<br>
-                        <strong>Resolution:</strong> ${resString}
+                        <strong>${cam.customName}</strong><br>
+                        Camera ID: ${cam.camera_id} | ${resString}
+                        <span class="timestamp">Captured: ${formattedTime}</span>
                     </div>
                 `;
 
-                // Click event to trigger the standalone full-screen viewer
                 card.addEventListener('click', () => {
-                    openModal(cam.image, `Camera ID: ${cam.camera_id} | Resolution: ${resString}`);
+                    openModal(cam.image, `${cam.customName} (ID: ${cam.camera_id}) — Captured: ${formattedTime}`);
                 });
                 
                 container.appendChild(card);
             });
         }
 
-        // Modal (Standalone Viewer) Logic
+        // Modal Logic
         const modal = document.getElementById('fullscreenModal');
         const modalImg = document.getElementById('modalImg');
         const modalCaption = document.getElementById('modalCaption');
@@ -204,7 +232,7 @@
             modal.style.display = "flex";
             modalImg.src = imgSrc;
             modalCaption.innerText = caption;
-            document.body.style.overflow = "hidden"; // Prevent background scrolling
+            document.body.style.overflow = "hidden";
         }
 
         function closeModal() {
@@ -213,22 +241,13 @@
         }
 
         closeBtn.onclick = closeModal;
-
-        // Close modal when clicking on the dark background (outside the image)
         window.onclick = function(event) {
-            if (event.target == modal) {
-                closeModal();
-            }
+            if (event.target == modal) closeModal();
         }
-
-        // Press 'Escape' to close modal
         window.addEventListener('keydown', function(event) {
-            if (event.key === "Escape") {
-                closeModal();
-            }
+            if (event.key === "Escape") closeModal();
         });
 
-        // Initialize script
         fetchCameras();
     </script>
 </body>
